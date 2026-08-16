@@ -225,83 +225,98 @@ function analyze(text) {
   return { ...base, ...derived, crisisHit, aiApplied: false };
 }
 
-/* ---- optional real AI pass, via the My Sky backend (FastAPI + Hugging
-   Face) instead of a browser-loaded model. Same role as before: the local
-   lexicon pass above always renders first for instant feedback, and this
-   pass quietly "corrects" the sky a moment later if the server confirms a
-   read. If the backend is unreachable, this simply resolves to null and
-   the lexicon-only result stands -- nothing else about the UX changes. --- */
-const API_BASE_URL = "http://localhost:8000"; // change this before deploying
+/* ---- optional real AI pass, client-side, no server, no API key -------- */
+const AI_MODEL_PRIMARY = "Xenova/emotion-english-distilroberta-base";
+const AI_MODEL_FALLBACK = "Xenova/distilbert-base-uncased-finetuned-sst-2-english";
+const AI_CDN = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
 
-// backend's 11 weather keys -> this frontend's condition keys
-const BACKEND_TO_LOCAL_COND = {
-  sunny: "sunny", clear: "clear", partly_cloudy: "partly", breezy: "breezy",
-  cloudy: "cloudy", foggy: "fog", rainy: "rain", thunderstorm: "storm",
-  snow: "snow", rainbow: "rainbow", aurora: "aurora",
-};
-// backend weather keys that map 1:1 onto this frontend's 9 emotion-bar
-// categories. partly_cloudy and rainbow are derived states with no single
-// bar of their own, same as they have no single LEXICON category here.
-const BACKEND_KEY_TO_CAT = {
-  sunny: "joy", clear: "calm", breezy: "carefree", cloudy: "tired",
-  foggy: "anxious", rainy: "sad", thunderstorm: "angry", snow: "overwhelmed",
-  aurora: "surprise",
-};
-const BACKEND_POS_KEYS = ["sunny", "clear", "breezy"];
-const BACKEND_NEG_KEYS = ["cloudy", "foggy", "rainy", "thunderstorm", "snow"];
+let aiPipeline = null, aiPipelineKind = null, aiLoadPromise = null;
 
-let backendAvailable = null;
-async function checkBackend() {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/health`);
-    backendAvailable = res.ok;
-  } catch (e) {
-    backendAvailable = false;
-  }
-  return backendAvailable;
+async function loadAI() {
+  if (aiLoadPromise) return aiLoadPromise;
+  aiLoadPromise = (async () => {
+    try {
+      const { pipeline } = await import(/* webpackIgnore: true */ AI_CDN);
+      try {
+        aiPipeline = await pipeline("text-classification", AI_MODEL_PRIMARY, { dtype: "q8" });
+        aiPipelineKind = "emotion";
+      } catch (e1) {
+        aiPipeline = await pipeline("sentiment-analysis", AI_MODEL_FALLBACK, { dtype: "q8" });
+        aiPipelineKind = "sentiment";
+      }
+    } catch (e) {
+      console.warn("My Sky: AI model unavailable, using the built-in offline engine.", e);
+      aiPipeline = null; aiPipelineKind = null;
+    }
+    return aiPipeline;
+  })();
+  return aiLoadPromise;
 }
 
-async function analyzeBackend(text) {
+async function analyzeAI(text) {
+  if (!aiPipeline || !text || !text.trim()) return null;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (e) {
-    return null;
-  }
+    if (aiPipelineKind === "emotion") {
+      const out = await aiPipeline(text, { top_k: null });
+      const arr = Array.isArray(out[0]) ? out[0] : out;
+      const scores = {};
+      arr.forEach(o => { scores[String(o.label).toLowerCase()] = o.score; });
+      return { kind: "emotion", scores };
+    }
+    if (aiPipelineKind === "sentiment") {
+      const out = await aiPipeline(text);
+      const top = Array.isArray(out) ? out[0] : out;
+      return { kind: "sentiment", label: top.label, score: top.score };
+    }
+  } catch (e) { return null; }
+  return null;
 }
 
 async function analyzeWithAI(text, base) {
-  const result = await analyzeBackend(text);
-  if (!result) return null; // server unreachable -> caller keeps the local lexicon result
+  const ai = await analyzeAI(text);
+  if (!ai) return null;
+  const merged = { ...base, catTotals: { ...base.catTotals } };
 
-  const catTotals = emptyCatTotals();
-  let posSum = 0, negSum = 0;
-  result.breakdown.forEach(b => {
-    if (BACKEND_POS_KEYS.includes(b.key)) posSum += b.percent;
-    if (BACKEND_NEG_KEYS.includes(b.key)) negSum += b.percent;
-    const cat = BACKEND_KEY_TO_CAT[b.key];
-    if (!cat) return; // partly_cloudy / rainbow: no direct bar
-    catTotals[cat] = NEG_CATS.includes(cat) ? -b.percent : b.percent;
-  });
+  if (ai.kind === "emotion") {
+    const s = ai.scores;
+    const neutral = s.neutral || 0;
+    // If the model itself reads the text as mostly neutral (a flat or
+    // repeated sentence, small talk, etc), let it speak quietly instead of
+    // dragging a clear lexicon signal around. This is what stops "I feel
+    // tired" from landing on a different sky depending on how many times
+    // it's repeated: a low-confidence AI pass now barely moves the needle.
+    const confidence = Math.max(0, 1 - neutral);
+    const W = 4 * confidence;
+    if (W < 0.25) {
+      const derived = deriveCondition(base.catTotals, base.weightSum);
+      return { ...base, ...derived, crisisHit: base.crisisHit, aiApplied: false };
+    }
+    if (s.joy) merged.catTotals.joy += s.joy * W;
+    if (s.sadness) merged.catTotals.sad += s.sadness * W;
+    if (s.anger) merged.catTotals.angry += s.anger * W;
+    if (s.disgust) merged.catTotals.angry += s.disgust * W * 0.7;
+    if (s.fear) merged.catTotals.anxious += s.fear * W;
+    if (s.surprise) merged.catTotals.surprise += s.surprise * W;
+    merged.weightSum = base.weightSum + W;
+  } else if (ai.kind === "sentiment") {
+    const confidence = ai.score; // sst2 has no neutral class, its own score is the confidence
+    const W = 3 * confidence;
+    if (W < 0.25) {
+      const derived = deriveCondition(base.catTotals, base.weightSum);
+      return { ...base, ...derived, crisisHit: base.crisisHit, aiApplied: false };
+    }
+    if (ai.label === "POSITIVE") merged.catTotals.joy += ai.score * W;
+    else {
+      merged.catTotals.sad += ai.score * W * 0.5;
+      merged.catTotals.anxious += ai.score * W * 0.3;
+      merged.catTotals.angry += ai.score * W * 0.2;
+    }
+    merged.weightSum = base.weightSum + W;
+  }
 
-  const cond = BACKEND_TO_LOCAL_COND[result.weather_key] || base.cond || "partly";
-  const netValence = (posSum - negSum) / 100;
-
-  return {
-    ...base,
-    cond,
-    catTotals,
-    netValence,
-    weightSum: Math.max(base.weightSum, 3),
-    crisisHit: base.crisisHit || !!result.crisis_flag,
-    aiApplied: true,
-    modelSource: result.model_source,
-  };
+  const derived = deriveCondition(merged.catTotals, merged.weightSum);
+  const crisisHit = base.crisisHit;
+  return { ...merged, ...derived, crisisHit, aiApplied: true };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -950,7 +965,7 @@ function init() {
   renderForecastStrip();
   renderHeatmap();
 
-  checkBackend().then(ok => { if (ok) $("#ai-badge").classList.remove("hidden"); });
+  loadAI().then(p => { if (p) $("#ai-badge").classList.remove("hidden"); });
 }
 
 document.addEventListener("DOMContentLoaded", init);
