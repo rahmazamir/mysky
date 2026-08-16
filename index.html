@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+<title>My Sky</title>
+<meta name="description" content="Turn a short daily journal entry into a colorful sky that matches how you feel." />
+<link rel="icon" href="favicon.png" type="image/png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============ onboarding modal ============ -->
+  <div class="modal-backdrop" id="onboard">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="onboard-title">
+      <h2 id="onboard-title" data-i18n="ob_title">Welcome to My Sky</h2>
+      <p data-i18n="ob_p1">Just write a few honest lines about your day, and watch the sky above change to match how you're feeling. That's it. No forms, no scores to think about.</p>
+      <ul>
+        <li data-i18n="ob_li1">Everything stays on your own device. Your words are never sent anywhere you don't choose.</li>
+        <li data-i18n="ob_li2">Watch your sky shift as you type, and get a small tip picked just for today.</li>
+        <li data-i18n="ob_li3">Come back each day to build a little calendar of how you've been feeling.</li>
+      </ul>
+      <button class="btn btn-primary" id="onboard-close" style="width:100%;justify-content:center;margin-top:10px;" data-i18n="ob_cta">Open my sky</button>
+    </div>
+  </div>
+
+  <!-- ============ settings sheet ============ -->
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <aside class="sheet" id="sheet" aria-label="Settings">
+    <h3 data-i18n="settings">Settings</h3>
+
+    <div class="setting-row">
+      <span data-i18n="theme">Theme</span>
+      <div class="seg" id="theme-seg">
+        <button data-val="light" aria-pressed="true" data-i18n="light">Light</button>
+        <button data-val="dark" aria-pressed="false" data-i18n="dark">Dark</button>
+      </div>
+    </div>
+
+    <div class="setting-row">
+      <span data-i18n="language">Language</span>
+      <div class="seg" id="lang-seg">
+        <button data-val="en" aria-pressed="true">EN</button>
+        <button data-val="ur" aria-pressed="false">اردو</button>
+      </div>
+    </div>
+
+    <div class="setting-row" style="border-top:1px solid var(--line); padding-top:14px; margin-top:4px; flex-direction:column; align-items:stretch; gap:8px;">
+      <button class="btn btn-ghost" id="export-btn" style="width:100%; justify-content:center;" data-i18n="export_data">Export my data</button>
+      <button class="btn btn-ghost" id="import-btn" style="width:100%; justify-content:center;" data-i18n="import_data">Import data</button>
+      <input type="file" id="import-file" accept=".json" class="hidden" />
+      <button class="btn btn-ghost" id="clear-btn" style="width:100%; justify-content:center; color:var(--c-red);" data-i18n="clear_data">Clear all data</button>
+    </div>
+  </aside>
+
+  <!-- ============ masthead ============ -->
+  <header class="masthead">
+    <div class="masthead-controls">
+      <button class="icon-btn" id="tts-btn" title="Read forecast aloud" aria-label="Read forecast aloud">&#128266;</button>
+      <button class="icon-btn" id="share-btn" title="Share today's forecast" aria-label="Share today's forecast">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
+      </button>
+      <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Settings">&#9881;</button>
+    </div>
+    <div class="brand">
+      <h1 data-i18n="app_name">My Sky</h1>
+      <p class="tagline" data-i18n="app_tagline">a gentle daily check-in</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ============ hero sky ============ -->
+    <section class="sky-stage" id="sky-stage" data-cond="partly" aria-live="polite">
+      <div class="sky-layer stars" id="stars"></div>
+
+      <div class="sky-layer sun">
+        <div class="sun-glow"></div>
+        <div class="sun-core"></div>
+      </div>
+
+      <div class="sky-layer cloud c1"><div class="cloud-inner"><svg viewBox="0 0 200 100" width="160"><ellipse cx="60" cy="60" rx="55" ry="30"/><ellipse cx="110" cy="45" rx="45" ry="35"/><ellipse cx="150" cy="60" rx="40" ry="26"/></svg></div></div>
+      <div class="sky-layer cloud c2"><div class="cloud-inner"><svg viewBox="0 0 200 100" width="120"><ellipse cx="60" cy="60" rx="55" ry="30"/><ellipse cx="110" cy="45" rx="45" ry="35"/></svg></div></div>
+      <div class="sky-layer cloud c3"><div class="cloud-inner"><svg viewBox="0 0 200 100" width="96"><ellipse cx="60" cy="60" rx="50" ry="28"/><ellipse cx="110" cy="48" rx="38" ry="30"/></svg></div></div>
+
+      <div class="sky-layer aurora-glow" id="aurora-glow"></div>
+
+      <svg class="mountains" viewBox="0 0 600 160" preserveAspectRatio="none">
+        <path class="mtn-back" d="M0,160 L0,90 L90,30 L160,80 L230,15 L310,75 L390,25 L470,85 L540,40 L600,90 L600,160 Z"/>
+        <path class="mtn-mid" d="M0,160 L0,110 L70,60 L140,105 L210,55 L290,110 L360,65 L440,115 L520,70 L600,115 L600,160 Z"/>
+        <path class="mtn-front" d="M0,160 L0,130 L60,95 L130,135 L200,90 L280,138 L350,100 L430,140 L510,105 L600,138 L600,160 Z"/>
+        <polygon class="mtn-cap" points="60,95 72,112 48,112"/>
+        <polygon class="mtn-cap" points="200,90 213,108 187,108"/>
+        <polygon class="mtn-cap" points="350,100 362,117 338,117"/>
+        <polygon class="mtn-cap" points="510,105 522,122 498,122"/>
+      </svg>
+
+      <svg class="tree-row" viewBox="0 0 600 70" preserveAspectRatio="none">
+        <polygon class="tree-shape" points="40,15 55,38 25,38"/><polygon class="tree-shape" points="40,26 60,52 20,52"/><rect class="tree-shape" x="37" y="50" width="6" height="16"/>
+        <polygon class="tree-shape" points="130,22 142,40 118,40"/><polygon class="tree-shape" points="130,30 146,54 114,54"/><rect class="tree-shape" x="127" y="52" width="6" height="14"/>
+        <polygon class="tree-shape" points="230,30 240,44 220,44"/><polygon class="tree-shape" points="230,36 244,56 216,56"/><rect class="tree-shape" x="227" y="54" width="5" height="12"/>
+        <polygon class="tree-shape" points="330,12 347,36 313,36"/><polygon class="tree-shape" points="330,24 352,50 308,50"/><rect class="tree-shape" x="326" y="48" width="7" height="18"/>
+        <polygon class="tree-shape" points="430,20 442,38 418,38"/><polygon class="tree-shape" points="430,28 446,52 414,52"/><rect class="tree-shape" x="427" y="50" width="6" height="14"/>
+        <polygon class="tree-shape" points="520,28 530,42 510,42"/><polygon class="tree-shape" points="520,34 533,54 507,54"/><rect class="tree-shape" x="517" y="52" width="5" height="12"/>
+      </svg>
+
+      <div class="sky-layer wind" id="wind-layer"></div>
+      <div class="sky-layer fogbank"></div>
+      <div class="sky-layer rain" id="rain-layer"></div>
+      <div class="sky-layer snow" id="snow-layer"></div>
+
+      <svg class="bolt bolt-a" viewBox="0 0 60 100" width="50" style="left:54%; top:22%;"><polygon points="30,0 8,55 26,55 16,100 52,40 32,40" fill="#FFEA00"/></svg>
+      <svg class="bolt bolt-b" viewBox="0 0 60 100" width="34" style="left:30%; top:14%;"><polygon points="30,0 8,55 26,55 16,100 52,40 32,40" fill="#FFEA00"/></svg>
+
+      <div class="rainbow-cloud left"><svg viewBox="0 0 200 100" width="70"><ellipse cx="60" cy="60" rx="55" ry="30" fill="#fff"/><ellipse cx="110" cy="45" rx="40" ry="30" fill="#fff"/></svg></div>
+      <svg class="rainbow-arc" viewBox="0 0 480 260" fill="none">
+        <path d="M10 260 A230 230 0 0 1 470 260" stroke="#FF8A80" stroke-width="13" stroke-linecap="round" />
+        <path d="M36 260 A204 204 0 0 1 444 260" stroke="#F6D9B6" stroke-width="13" stroke-linecap="round" />
+        <path d="M62 260 A178 178 0 0 1 418 260" stroke="#F3E7A6" stroke-width="13" stroke-linecap="round" />
+        <path d="M88 260 A152 152 0 0 1 392 260" stroke="#CDE8C0" stroke-width="13" stroke-linecap="round" />
+        <path d="M114 260 A126 126 0 0 1 366 260" stroke="#BFE0E8" stroke-width="13" stroke-linecap="round" />
+        <path d="M140 260 A100 100 0 0 1 340 260" stroke="#C7C2E8" stroke-width="13" stroke-linecap="round" />
+        <path d="M166 260 A74 74 0 0 1 314 260" stroke="#E3C6DE" stroke-width="13" stroke-linecap="round" />
+      </svg>
+      <div class="rainbow-cloud right"><svg viewBox="0 0 200 100" width="70"><ellipse cx="60" cy="60" rx="55" ry="30" fill="#fff"/><ellipse cx="110" cy="45" rx="40" ry="30" fill="#fff"/></svg></div>
+
+      <div class="sky-caption">
+        <div>
+          <div class="cond-name" id="cond-name" data-i18n="cond_partly">Partly Cloudy</div>
+          <div class="cond-sub" id="cond-sub" data-i18n="cond_sub_default">No forecast yet, write about your day</div>
+        </div>
+        <div class="temp" id="temp-block"><b id="temp-num">--&deg;</b><span id="temp-label" data-i18n="mood_temp">mood&nbsp;temp</span></div>
+      </div>
+    </section>
+
+    <!-- ============ main grid ============ -->
+    <div class="grid">
+      <!-- left column -->
+      <div style="display:flex; flex-direction:column; gap:18px;">
+
+        <div class="card">
+          <div class="card-eyebrow-row">
+            <span class="card-eyebrow" data-i18n="eyebrow_entry">Today's entry</span>
+            <span class="ai-badge hidden" id="ai-badge" data-i18n="ai_badge">AI enhanced</span>
+          </div>
+          <h2 data-i18n="entry_title">How was today?</h2>
+          <p class="hint" data-i18n="entry_hint">A few honest sentences is plenty. Your sky updates as you type.</p>
+          <textarea id="entry" placeholder="Today I..." data-i18n-ph="entry_placeholder"></textarea>
+
+          <div class="mood-row" id="mood-row" role="group" aria-label="Quick mood tags">
+            <button class="mood-chip" data-word="happy" data-i18n="mood_happy">happy</button>
+            <button class="mood-chip" data-word="calm" data-i18n="mood_calm">calm</button>
+            <button class="mood-chip" data-phrase-key="phrase_ordinary" data-i18n="mood_ordinary">ordinary</button>
+            <button class="mood-chip" data-word="chill" data-i18n="mood_chill">chill</button>
+            <button class="mood-chip" data-word="tired" data-i18n="mood_tired">tired</button>
+            <button class="mood-chip" data-word="anxious" data-i18n="mood_anxious">anxious</button>
+            <button class="mood-chip" data-word="sad" data-i18n="mood_sad">sad</button>
+            <button class="mood-chip" data-word="frustrated" data-i18n="mood_frustrated">frustrated</button>
+            <button class="mood-chip" data-word="overwhelmed" data-i18n="mood_overwhelmed">overwhelmed</button>
+            <button class="mood-chip" data-phrase-key="phrase_mixed" data-i18n="mood_mixed">mixed</button>
+            <button class="mood-chip" data-word="surprised" data-i18n="mood_surprised">surprised</button>
+          </div>
+
+          <div class="row-actions">
+            <button class="btn btn-primary" id="save-btn" data-i18n="save_forecast">Save today's forecast</button>
+            <span class="streak" id="streak-label">&#128293; <b>0</b> <span data-i18n="day_streak">day streak</span></span>
+          </div>
+          <div class="crisis-note" id="crisis-note"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-eyebrow" data-i18n="eyebrow_breakdown">Emotion breakdown</div>
+          <h2 data-i18n="breakdown_title">What's in the mix</h2>
+          <div class="emo-bars" id="emo-bars"></div>
+        </div>
+      </div>
+
+      <!-- right column -->
+      <div style="display:flex; flex-direction:column; gap:18px;">
+
+        <div class="card tip-card">
+          <div class="card-eyebrow" data-i18n="eyebrow_tip">Wellness tip</div>
+          <h2 id="tip-title" data-i18n="tip_default_title">Write an entry to see your tip</h2>
+          <p class="tip-body" id="tip-body" data-i18n="tip_default_body">Once you write a few lines, you'll get a small suggestion picked for how today felt.</p>
+          <button class="btn btn-ghost hidden" id="breathe-btn" style="width:100%; justify-content:center;" data-i18n="try_breathing">Try a calming breathing break</button>
+        </div>
+
+        <div class="card">
+          <div class="card-eyebrow" data-i18n="eyebrow_week">This week</div>
+          <h2 data-i18n="week_title">7-day forecast</h2>
+          <div class="forecast-strip" id="forecast-strip"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-eyebrow" data-i18n="eyebrow_month">This month</div>
+          <h2 data-i18n="month_title">Your climate</h2>
+          <div class="hm-month" id="hm-month"></div>
+          <div class="heatmap" id="heatmap"></div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="site-footer">
+      <span data-i18n="footer_text">Your entries stay on this device. Nothing is sent anywhere unless you export it yourself.</span>
+    </footer>
+  </main>
+
+  <!-- ============ breathing modal ============ -->
+  <div class="breathe-backdrop" id="breathe-backdrop"></div>
+  <div class="breathe-modal" id="breathe-modal" role="dialog" aria-modal="true" aria-labelledby="breathe-phase">
+    <button class="breathe-close" id="breathe-close" aria-label="Close">&#10005;</button>
+    <div class="breathe-stage" id="breathe-stage">
+      <div class="breathe-ring r3"></div>
+      <div class="breathe-ring r2"></div>
+      <div class="breathe-ring r1"></div>
+      <div class="breathe-core" id="breathe-core"></div>
+    </div>
+    <div class="breathe-phase" id="breathe-phase" data-i18n="breathe_in">Breathe In</div>
+    <div class="breathe-timer" id="breathe-timer">00:30</div>
+    <button class="btn breathe-pause" id="breathe-pause-btn" data-i18n="breathe_pause">Pause</button>
+  </div>
+
+  <!-- ============ share modal (Instagram Story card) ============ -->
+  <div class="share-backdrop" id="share-backdrop"></div>
+  <div class="share-modal" id="share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+    <button class="breathe-close" id="share-close" aria-label="Close">&#10005;</button>
+    <h3 id="share-title" data-i18n="share_preview_title">Your sky, ready to share</h3>
+    <img id="share-preview-img" class="share-preview-img" alt="My Sky forecast card" />
+    <div class="share-actions">
+      <button class="btn btn-primary hidden" id="share-native-btn" data-i18n="share_share">Share</button>
+      <button class="btn btn-ghost" id="share-download-btn" data-i18n="share_download">Download</button>
+    </div>
+    <div class="share-caption-row">
+      <input type="text" id="share-caption-text" readonly aria-label="Caption" />
+      <button class="btn btn-ghost" id="share-copy-btn" data-i18n="share_copy">Copy caption</button>
+    </div>
+  </div>
+
+  <canvas id="share-canvas" width="1080" height="1920" class="hidden"></canvas>
+
+  <script src="i18n.js"></script>
+  <script src="lexicon.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
